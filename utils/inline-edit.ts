@@ -23,8 +23,9 @@ interface InlineEditResult {
 /**
  * Performs a find-and-replace operation on a file's content. It first searches
  * for the 'find' block within a tolerance window (+/- 2 lines) of the specified
- * lineNumber. If a match is found, it performs the replacement. If not, it
- * generates a detailed error log to help the AI self-correct.
+ * lineNumber. If not found, it searches the entire file for a single unique match
+ * and uses that as a fallback. If the match is still not found or is ambiguous,
+ * it generates a detailed error log to help the AI self-correct.
  */
 export function performInlineEdit(
     fileName: FileName,
@@ -58,7 +59,6 @@ export function performInlineEdit(
     let actualMatchIndex: number | null = null;
 
     const searchStartIndex = Math.max(0, targetLineIndex - SEARCH_TOLERANCE);
-    // Ensure we don't search past where the find block could possibly fit.
     const searchEndIndex = Math.min(fileLines.length - findBlockLines.length + 1, targetLineIndex + SEARCH_TOLERANCE + 1);
     
     for (let i = searchStartIndex; i < searchEndIndex; i++) {
@@ -78,11 +78,30 @@ export function performInlineEdit(
         return { success: true, newContent };
     }
 
-    // --- No match in tolerance window, proceed to detailed error reporting ---
+    // --- No match in tolerance window, search the entire file for a unique alternative ---
+    const alternativeMatches: number[] = [];
+    for (let i = 0; i <= fileLines.length - findBlockLines.length; i++) {
+        const sliceToCheck = fileLines.slice(i, i + findBlockLines.length).join('\n');
+        if (normalizeBlock(sliceToCheck) === normalizedFind) {
+            alternativeMatches.push(i);
+        }
+    }
+
+    // If exactly one unique alternative is found, use it automatically.
+    if (alternativeMatches.length === 1) {
+        const correctedMatchIndex = alternativeMatches[0];
+        const before = fileLines.slice(0, correctedMatchIndex);
+        const after = fileLines.slice(correctedMatchIndex + findBlockLines.length);
+        const replaceLines = replaceBlock.length > 0 ? replaceBlock.split('\n') : [];
+        const newContent = [...before, ...replaceLines, ...after].join('\n');
+        // The correction is applied silently to reduce a failure turn. The AI will get a success log.
+        return { success: true, newContent };
+    }
+
+    // --- If no unique match found, proceed to detailed error reporting ---
     const errorLogParts: string[] = [];
     errorLogParts.push(`Inline edit failed on ${fileName}: The 'find' block was not found at or near the specified line number (${lineNumber} +/- ${SEARCH_TOLERANCE} lines).`);
 
-    // Provide context from the actual file content around the AI's target line
     const contextStart = Math.max(0, targetLineIndex - 5);
     const contextEnd = Math.min(fileLines.length, targetLineIndex + 6);
     const contextSnippet = fileLines
@@ -91,21 +110,10 @@ export function performInlineEdit(
         .join('\n');
     errorLogParts.push(`\n--- Code at target line ${lineNumber} (+/- 5 lines) ---\n${contextSnippet}\n---`);
 
-    // Find alternative locations for the find block throughout the entire file.
-    const alternativeMatches: number[] = [];
-    for (let i = 0; i <= fileLines.length - findBlockLines.length; i++) {
-        // Skip the area we already checked
-        if (i >= searchStartIndex && i < searchEndIndex) continue;
-        
-        const sliceToCheck = fileLines.slice(i, i + findBlockLines.length).join('\n');
-        if (normalizeBlock(sliceToCheck) === normalizedFind) {
-            alternativeMatches.push(i + 1);
-        }
-    }
-
-    if (alternativeMatches.length > 0) {
-        errorLogParts.push(`The 'find' block was found at these other line(s): ${alternativeMatches.join(', ')}.`);
-    } else {
+    if (alternativeMatches.length > 1) {
+        const alternativeLines = alternativeMatches.map(i => i + 1);
+        errorLogParts.push(`The 'find' block is ambiguous and was found at these other lines: ${alternativeLines.join(', ')}. Please provide a more specific line number or find block.`);
+    } else { // alternativeMatches.length === 0
         errorLogParts.push("The 'find' block was not found anywhere else in the file.");
     }
     

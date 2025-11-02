@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, Applet } from '../types';
 import { Sender } from '../types';
 // FIX: Import CloseIcon to be used for removing uploaded files.
-import { SendIcon, PaperclipIcon, ImageIcon, FileTextIcon, PlusIcon, ChevronDownIcon, FilesIcon, SettingsIcon, CloseIcon } from './icons';
+import { SendIcon, PaperclipIcon, ImageIcon, FileTextIcon, PlusIcon, ChevronDownIcon, FilesIcon, SettingsIcon, CloseIcon, ArchiveIcon } from './icons';
 import ChatMessageItem from './ChatMessageItem';
 import { BotIcon } from './icons';
 import Footer from './Footer';
@@ -14,12 +14,14 @@ interface ChatPanelProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   onSendMessage: (message: string, files: {file: File, previewUrl: string}[]) => void;
+  onStop: () => void;
   applets: Applet[];
   activeAppletId: string;
   onSelectApplet: (id: string) => void;
   onCreateApplet: () => void;
   onOpenFiles: () => void;
   onOpenSettings: () => void;
+  onOpenImportExport: () => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -27,6 +29,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   isLoading,
   currentStatus,
   onSendMessage,
+  onStop,
   isOpen,
   setIsOpen,
   applets,
@@ -35,6 +38,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onCreateApplet,
   onOpenFiles,
   onOpenSettings,
+  onOpenImportExport,
 }) => {
   const [input, setInput] = useState('');
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
@@ -125,12 +129,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       <div className="flex-1 flex flex-col min-h-0">
           <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-[#333]">
               <h1 className="text-lg font-bold">Quick Apps</h1>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                   <button onClick={onOpenFiles} className="p-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white rounded-md transition-colors" aria-label="View files">
                       <FilesIcon className="w-5 h-5" />
                   </button>
                   <button onClick={onOpenSettings} className="p-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white rounded-md transition-colors" aria-label="Open settings">
                       <SettingsIcon className="w-5 h-5" />
+                  </button>
+                  <button onClick={onOpenImportExport} className="p-2 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white rounded-md transition-colors" aria-label="Import or export applet">
+                      <ArchiveIcon className="w-5 h-5" />
                   </button>
               </div>
           </div>
@@ -175,7 +182,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
         
         <div className="py-2">
-            <Footer isLoading={isLoading} currentStatus={currentStatus} />
+            <Footer 
+                isLoading={isLoading} 
+                currentStatus={currentStatus}
+                onViewAppClick={() => setIsOpen(false)}
+            />
         </div>
 
         <div className="pt-4 border-t border-gray-200 dark:border-[#333]">
@@ -231,13 +242,27 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   disabled={isLoading}
                   className="flex-1 bg-gray-100 dark:bg-[#222] border border-gray-200 dark:border-[#333] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 dark:focus:ring-gray-500 transition-colors"
                 />
-                <button
-                  type="submit"
-                  disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
-                  className="p-2.5 flex items-center justify-center bg-gray-200 dark:bg-[#333] hover:bg-gray-300 dark:hover:bg-[#444] disabled:bg-gray-100 dark:disabled:bg-[#222] disabled:cursor-not-allowed rounded-md transition-colors"
-                >
-                  <SendIcon className="w-5 h-5" />
-                </button>
+                {isLoading ? (
+                    <button
+                        type="button"
+                        onClick={onStop}
+                        className="p-2.5 flex items-center justify-center bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-gray-300 hover:bg-red-200 dark:hover:bg-red-900/50 hover:text-red-700 dark:hover:text-red-300 rounded-md transition-colors group"
+                        aria-label="Stop generation"
+                    >
+                        <div className="w-5 h-5 relative flex items-center justify-center">
+                            <div className="absolute w-full h-full border-2 border-current rounded-full animate-spin border-t-transparent opacity-70"></div>
+                            <div className="w-1.5 h-1.5 bg-current"></div>
+                        </div>
+                    </button>
+                ) : (
+                    <button
+                        type="submit"
+                        disabled={!input.trim() && uploadedFiles.length === 0}
+                        className="p-2.5 flex items-center justify-center bg-gray-200 dark:bg-[#333] hover:bg-gray-300 dark:hover:bg-[#444] disabled:bg-gray-100 dark:disabled:bg-[#222] disabled:cursor-not-allowed rounded-md transition-colors"
+                        >
+                        <SendIcon className="w-5 h-5" />
+                    </button>
+                )}
               </form>
               <input 
                 type="file"

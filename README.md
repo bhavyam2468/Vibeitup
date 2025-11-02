@@ -1,4 +1,3 @@
-
 # Quick Apps - AI-Powered UI Generator
 
 **Quick Apps** is a sophisticated web application that leverages the Gemini API to autonomously generate and modify web UI code. It provides a seamless development experience where a user can describe an interface or functionality, and the AI will iteratively write the HTML, CSS, and JavaScript to bring it to life.
@@ -12,10 +11,43 @@ The core of the application is a powerful, recursive loop that allows the AI to 
 - **Live Preview:** Instantly see the results of the AI's code changes in a sandboxed iframe.
 - **Interactive Chat Interface:** Communicate with the AI, provide new instructions, and receive updates on its progress.
 - **Multi-File Editing:** The AI can read and write to `index.html`, `styles.css`, and `script.js`.
-- **Transparent Reasoning:** See the AI's thought process before it acts through a dedicated "Reasoning" log.
+- **Transparent Reasoning:** See the AI's thought process before it acts through a dedicated "Reasoning" section.
 - **Applet Management:** Create and switch between multiple independent projects (applets).
 - **Pre-loaded Libraries:** Comes equipped with popular libraries like Pico.css, Lucide Icons, Chart.js, and more to build rich UIs.
 - **Debugging Tools:** Inspect the AI's raw model output and detailed tool execution logs for advanced troubleshooting.
+
+---
+
+## Changelog
+
+-   **New Applet Command:** Added the ability to start a new applet from scratch, clearing the previous state.
+-   **`$$title()` Command:** Implemented a command for the AI to set a descriptive title for the applet in its first turn.
+-   **Stop Generation Button:** Added a "Stop" button to the UI, allowing the user to gracefully interrupt the AI's generation process at any time.
+
+---
+
+## Example Project Changelog: Pomodoro Timer
+
+This changelog documents the features built by the AI for a "Pomodoro Timer" applet, as detailed in an example development session. It showcases the AI's ability to build a feature-rich application from a simple prompt.
+
+-   **Core Timer Functionality:**
+    -   Implemented a fully functional timer with Start, Pause, and Reset controls.
+    -   Added support for three modes: Pomodoro, Short Break, and Long Break.
+    -   The browser tab's title dynamically updates to reflect the current time.
+-   **Smart Features & Automation:**
+    -   **Automatic Cycles:** The timer automatically transitions from a work session (Pomodoro) to a break session.
+    -   **Long Break Cycle:** After 4 Pomodoros, the timer automatically initiates a Long Break.
+    -   **Sound Notifications:** Plays a notification sound using `Howler.js` when each session ends.
+    -   **Pomodoro Counter:** A visual counter displays the number of completed Pomodoros in the current cycle.
+    -   **Skip Button:** Added a button to skip the current session and move to the next one in the cycle.
+-   **Customization & Persistence:**
+    -   **Settings Modal:** A comprehensive settings modal allows users to customize the duration for Pomodoro, Short Break, and Long Break sessions.
+    -   **Persistent Settings:** User-defined settings are saved to the browser's local storage using `localForage`, so preferences are remembered across visits.
+-   **UI/UX & Design:**
+    -   Built with a modern, clean, mobile-first dark theme.
+    -   Features smooth animations and interactive states for all controls.
+    -   Utilizes Lucide Icons for a sharp and consistent visual language.
+    -   The entire UI is designed to fit on a standard mobile screen without scrolling.
 
 ---
 

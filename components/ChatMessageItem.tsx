@@ -13,6 +13,8 @@ const formatCommand = (cmd: Command): string => {
     switch (cmd.name) {
         case 'edit': return `edit(${cmd.fileName})`;
         case 'inline_edit': return `inline_edit(${cmd.fileName}, ${cmd.lineNumber})`;
+        case 'title': return `title("${cmd.content}")`;
+        case 'task_completed': return `task_completed()`;
         default: return cmd.name;
     }
 }

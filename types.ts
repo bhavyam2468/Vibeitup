@@ -17,7 +17,7 @@ export interface ChatMessage {
 export type FileName = 'index.html' | 'styles.css' | 'script.js';
 
 export interface Command {
-    name: 'edit' | 'chat' | 'reasoning' | 'task_completed' | 'inline_edit';
+    name: 'edit' | 'chat' | 'reasoning' | 'task_completed' | 'inline_edit' | 'title';
     fileName?: FileName;
     lineNumber?: number;
     content: string;

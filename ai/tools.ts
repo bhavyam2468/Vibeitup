@@ -18,8 +18,11 @@ You have the following third-party libraries pre-loaded and ready to use in \`in
 
 *   **Chart.js:** For creating charts and data visualizations.
     *   **Usage:** Create a \`<canvas id="myChart"></canvas>\` in HTML. Then, in JavaScript:
-        \`const ctx = document.getElementById('myChart').getContext('2d');\`
-        \`new Chart(ctx, { type: 'bar', data: {...} });\`
+        {/* FIX: The original backticks were breaking the template literal. Replaced with a markdown code block. */}
+        \`\`\`javascript
+        const ctx = document.getElementById('myChart').getContext('2d');
+        new Chart(ctx, { type: 'bar', data: {...} });
+        \`\`\`
 
 *   **Day.js:** A lightweight library for handling dates and times.
     *   **Usage:** The \`dayjs\` function is available globally. Example: \`dayjs().format('MMMM D, YYYY');\`.
@@ -66,26 +69,52 @@ Failure to do so will cause the system to fail.
         $$$
 
 4.  **$$inline_edit(filename, line_number)**
-    -   **PREFERRED TOOL FOR ALL MODIFICATIONS.** Replaces a block of code by finding an exact match at a specific line.
-    -   This is the primary tool for adding, deleting, or changing code.
-    -   **To delete code:** Provide a \`[[replace]]\` block that is empty.
+    -   **YOUR PRIMARY TOOL FOR ALL CODE MODIFICATIONS.** This command finds and replaces a specific block of code. Mastering it is the key to success.
+
+    -   **How It Works:**
+        1.  The system looks for the exact text in your \`[[find]]\` block.
+        2.  It starts searching at the \`line_number\` you provide, with a small tolerance (+/- 2 lines).
+        3.  **NEW:** If it can't find a match there, it will search the *entire file*. If it finds exactly ONE other match, it will **automatically use it** and succeed.
+        4.  If it finds multiple matches or no matches, it will fail and you MUST correct your command on the next turn.
+
     -   **Syntax:**
         $$inline_edit(filename, line_number)
         [[find]]
         (The exact code you want to find and replace)
         [[replace]]
-        (The new code you want to insert)
+        (The new code you want to insert. Leave empty to delete.)
         [[end]]
         $$$
-    -   **CRITICAL RULE FOR MULTIPLE EDITS:** When making multiple \`inline_edit\` calls on the **same file** in a single turn, you **MUST** order them from the **highest line number to the lowest line number** (bottom to top). This is essential to prevent line number shifts from causing subsequent edits to fail.
-        -   **Correct Order:**
-            1.  \`$$inline_edit(script${'.'}js, 95)\`
-            2.  \`$$inline_edit(script${'.'}js, 42)\`
-            3.  \`$$inline_edit(script${'.'}js, 10)\`
-        -   **Incorrect Order (WILL FAIL):**
-            1.  \`$$inline_edit(script${'.'}js, 10)\`
-            2.  \`$$inline_edit(script${'.'}js, 42)\`
-            3.  \`$$inline_edit(script${'.'}js, 95)\`
+
+    -   **BEST PRACTICES FOR AVOIDING FAILURE:**
+        *   **Use Context in \`[[find]]\`:** Do not just find the one line you want to change. Include one or two lines *before and after* it that are NOT changing. This creates a unique "anchor" for your edit and dramatically reduces failures.
+            -   **BAD \`[[find]]\` (Fragile):**
+                \`\`\`
+                [[find]]
+                <h1>Hello, World!</h1>
+                \`\`\`
+            -   **GOOD \`[[find]]\` (Robust):**
+                \`\`\`
+                [[find]]
+    <main class="container">
+        <h1>Hello, World!</h1>
+        <p>Start by telling me what to build.</p>
+    </main>
+                \`\`\`
+        *   **Verify Line Numbers:** Before you write your command, look at the file content provided in the prompt and double-check the line numbers.
+        *   **Order Multiple Edits:** When editing the same file multiple times in one turn, ALWAYS go from the highest line number to the lowest (bottom-to-top).
+
+    -   **HOW TO RECOVER FROM ERRORS:**
+        *   If a command fails, the **OBSERVATION LOG** will tell you why. READ IT CAREFULLY.
+        *   If it says \`The 'find' block was not found at or near the specified line number...\`, it means your \`[[find]]\` block or \`line_number\` is wrong.
+        *   The log will show you the code around your target line. Use this snippet to create a correct, robust \`[[find]]\` block.
+        *   If the log says \`The 'find' block is ambiguous and was found at these other lines: X, Y\`, it means your \`[[find]]\` block is not unique. Make it more specific by adding more context, and use the correct line number (X or Y).
+
+5.  **$$title("new_name")**
+    -   Sets or changes the name of the current applet.
+    -   **MANDATORY:** You MUST use this command on your first turn to give the applet a descriptive name based on the user's request.
+    -   Example:
+        $$title("Interactive Weather Dashboard")
 
 **ERROR CORRECTION AND CONTINUOUS OPERATION:**
 

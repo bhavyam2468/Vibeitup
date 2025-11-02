@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Content, Part } from '@google/genai';
+import JSZip from 'jszip';
 import type { ChatMessage, FileName, Command, ModelId, TurnLog, LogEntry, Applet } from './types';
 import { Sender } from './types';
 import { INITIAL_HTML, INITIAL_CSS, INITIAL_JS, SYSTEM_INSTRUCTION, MODELS } from './constants';
@@ -16,6 +17,7 @@ import RawOutputModal from './components/RawOutputModal';
 import LogsModal from './components/LogsModal';
 import Toast from './components/Toast';
 import FileOverlay from './components/FileOverlay';
+import ImportExportModal from './components/ImportExportModal';
 
 const createNewApplet = (name: string): Applet => ({
     id: `applet_${Date.now()}`,
@@ -39,12 +41,15 @@ const App: React.FC = () => {
     const [isRawOutputModalOpen, setIsRawOutputModalOpen] = useState(false);
     const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
     const [isFileOverlayOpen, setIsFileOverlayOpen] = useState(false);
+    const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
     const [selectedModel, setSelectedModel] = useState<ModelId>(MODELS[0].id);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [toastType, setToastType] = useState<'info' | 'warning' | 'error'>('info');
     
     const previewUpdateTimeoutRef = useRef<number | null>(null);
     const filesRef = useRef<Record<FileName, string>>({ 'index.html': '', 'styles.css': '', 'script.js': '' });
+    const isStoppingRef = useRef(false);
+    const recursionTimeoutRef = useRef<number | null>(null);
 
     const activeApplet = applets.find(a => a.id === activeAppletId);
 
@@ -96,6 +101,20 @@ const App: React.FC = () => {
             applet.id === activeAppletId ? updater(applet) : applet
         ));
     };
+    
+    const handleStop = useCallback(() => {
+        console.log("Stop requested by user.");
+        isStoppingRef.current = true;
+        if (recursionTimeoutRef.current) {
+            clearTimeout(recursionTimeoutRef.current);
+            recursionTimeoutRef.current = null;
+        }
+        setIsLoading(false);
+        setCurrentStatus('Interrupted by user');
+        updateActiveApplet(a => ({...a, chatHistory: a.chatHistory.filter(msg => {
+            return !( (msg.sender === Sender.Reasoning || msg.sender === Sender.Model) && msg.message.trim() === '' )
+        })}));
+    }, []);
 
     const executeFileCommands = (commands: Command[]): { logs: LogEntry[], changes: Partial<Record<FileName, string>> } => {
         const logs: LogEntry[] = [];
@@ -160,14 +179,13 @@ const App: React.FC = () => {
         let previousTurnFailures: LogEntry[];
 
         if (continuationModelHistory && previousTurnLogsForRecursion) {
-            // This is a recursive call. Use the history and logs passed directly from the previous execution to avoid stale state.
             currentModelHistory = continuationModelHistory;
             previousTurnFailures = previousTurnLogsForRecursion.filter(l => l.status === 'failure');
             if (previousTurnFailures.length === 0) {
                 updateActiveApplet(a => ({...a, chatHistory: [...a.chatHistory, { sender: Sender.System, message: 'Continuing work...' }]}));
             }
         } else {
-            // This is a user-initiated call. Build history from current state and get failures from the last completed turn.
+            isStoppingRef.current = false;
             const lastTurnInHistory = activeApplet.fullLogHistory[activeApplet.fullLogHistory.length - 1];
             previousTurnFailures = lastTurnInHistory?.logs.filter(l => l.status === 'failure') || [];
 
@@ -222,8 +240,11 @@ const App: React.FC = () => {
         try {
             const result = await generateCodeStream(fullSystemInstruction, currentModelHistory, selectedModel);
 
-            // FIX: Iterate directly over 'result' as it's now an AsyncIterable matching SDK's return type.
             for await (const chunk of result) {
+                if (isStoppingRef.current) {
+                    console.log("Streaming interrupted.");
+                    return; 
+                }
                 fullResponseText += chunk.text;
                 const { commands } = parseGeminiResponse(fullResponseText);
                 
@@ -262,13 +283,20 @@ const App: React.FC = () => {
                 });
             }
 
+            if (isStoppingRef.current) return;
+
             if (previewUpdateTimeoutRef.current) clearTimeout(previewUpdateTimeoutRef.current);
             
-            // FIX: Removed `await result.response;` because the updated SDK returns a direct async iterable
-            // and the `for await...of` loop already handles stream finalization.
-
             const { commands } = parseGeminiResponse(fullResponseText);
+            const turnLogs: LogEntry[] = [];
             
+            const titleCommand = commands.find(c => c.name === 'title');
+            if (titleCommand) {
+                const newTitle = titleCommand.content;
+                updateActiveApplet(a => ({ ...a, name: newTitle }));
+                turnLogs.push({ command: `title("${newTitle}")`, status: 'success', message: 'Applet name updated.' });
+            }
+
             const reasoningText = commands.filter(c => c.name === 'reasoning').map(c => c.content).join('\n\n');
             const chatText = commands.filter(c => c.name === 'chat').map(c => c.content).join('\n\n');
             const executedCommands = commands.filter(c => c.name !== 'chat' && c.name !== 'reasoning');
@@ -300,7 +328,6 @@ const App: React.FC = () => {
                 }));
             }
 
-            const turnLogs: LogEntry[] = [];
             commands.forEach(cmd => {
                 if (['reasoning', 'chat', 'task_completed'].includes(cmd.name)) {
                     turnLogs.push({ command: `${cmd.name}()`, status: 'success', message: 'Command parsed.' });
@@ -314,15 +341,15 @@ const App: React.FC = () => {
                 logs: turnLogs,
             }]}));
             
-            if (fullResponseText.trim() || commands.length > 0) { // Check for commands too, in case model only emits commands
+            if (fullResponseText.trim() || commands.length > 0) {
                 const newModelHistory = [...currentModelHistory, { role: 'model', parts: [{ text: fullResponseText }] }];
                 updateActiveApplet(a => ({...a, modelHistory: newModelHistory}));
 
                 const shouldRecurse = shouldContinueAfterTurn(commands);
 
                 if (shouldRecurse) {
-                    setTimeout(() => {
-                        processAndRunGemini([], newModelHistory, turnLogs); // Continue recursion with new history and logs
+                    recursionTimeoutRef.current = window.setTimeout(() => {
+                        processAndRunGemini([], newModelHistory, turnLogs);
                     }, 500);
                 } else {
                     setIsLoading(false);
@@ -335,6 +362,10 @@ const App: React.FC = () => {
             }
 
         } catch (error) {
+            if (isStoppingRef.current) {
+                console.log("Error suppressed as stop was requested.", error);
+                return;
+            }
             if (previewUpdateTimeoutRef.current) clearTimeout(previewUpdateTimeoutRef.current);
             console.error("Error calling Gemini API:", error);
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
@@ -353,6 +384,8 @@ const App: React.FC = () => {
 
     const handleSendMessage = useCallback(async (message: string, files: {file: File, previewUrl: string}[]) => {
         if (!activeApplet) return;
+
+        isStoppingRef.current = false;
 
         let userContentParts: Part[] = [];
         if (message.trim()) {
@@ -395,14 +428,80 @@ const App: React.FC = () => {
     };
 
     const handleCreateApplet = () => {
-        const newName = window.prompt("Enter a name for your new applet:", `Applet ${applets.length + 1}`);
-        if (newName) {
-            const newApplet = createNewApplet(newName);
-            setApplets(prev => [...prev, newApplet]);
-            setActiveAppletId(newApplet.id);
+        if (!activeApplet) return;
+
+        const isPristine =
+            activeApplet.html === INITIAL_HTML &&
+            activeApplet.css === INITIAL_CSS &&
+            activeApplet.js === INITIAL_JS &&
+            activeApplet.chatHistory.length === 0;
+
+        if (isPristine) {
+            showToast("Current applet is already empty.", 'info');
+            return;
         }
+
+        const newName = `Applet ${applets.length + 1}`;
+        const newApplet = createNewApplet(newName);
+        setApplets(prev => [...prev, newApplet]);
+        setActiveAppletId(newApplet.id);
+        showToast(`Created new applet: ${newName}`, 'info');
     };
     
+    const handleExportApplet = async () => {
+        if (!activeApplet) return;
+
+        try {
+            const zip = new JSZip();
+            zip.file('index.html', activeApplet.html);
+            zip.file('styles.css', activeApplet.css);
+            zip.file('script.js', activeApplet.js);
+
+            const blob = await zip.generateAsync({ type: 'blob' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const safeName = activeApplet.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            link.download = `${safeName || 'applet'}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            
+            showToast('Applet exported successfully!', 'info');
+            setIsImportExportModalOpen(false);
+        } catch (error) {
+            console.error("Failed to export applet:", error);
+            showToast('Failed to export applet. See console for details.', 'error');
+        }
+    };
+
+    const handleImportApplet = async (file: File) => {
+        if (!activeApplet) return;
+        try {
+            const zip = await JSZip.loadAsync(file);
+            const htmlFile = zip.file('index.html');
+            const cssFile = zip.file('styles.css');
+            const jsFile = zip.file('script.js');
+
+            if (!htmlFile || !cssFile || !jsFile) {
+                throw new Error("Zip must contain index.html, styles.css, and script.js");
+            }
+
+            const html = await htmlFile.async('string');
+            const css = await cssFile.async('string');
+            const js = await jsFile.async('string');
+
+            updateActiveApplet(a => ({ ...a, html, css, js }));
+            showToast('Applet imported successfully!', 'info');
+            setIsImportExportModalOpen(false);
+        } catch (error) {
+            console.error("Failed to import applet:", error);
+            const message = error instanceof Error ? error.message : "An unknown error occurred.";
+            showToast(`Import failed: ${message}`, 'error');
+        }
+    };
+
     if (!activeApplet) {
         return <div className="bg-[#111111] h-screen flex items-center justify-center text-white">Loading Applets...</div>;
     }
@@ -436,6 +535,12 @@ const App: React.FC = () => {
                 cssCode={activeApplet.css}
                 jsCode={activeApplet.js}
             />
+            <ImportExportModal
+                isOpen={isImportExportModalOpen}
+                onClose={() => setIsImportExportModalOpen(false)}
+                onExport={handleExportApplet}
+                onImport={handleImportApplet}
+            />
             <Toast message={toastMessage} onClose={() => setToastMessage(null)} type={toastType} />
             <div className="relative flex flex-1 overflow-hidden">
                 <ChatPanel 
@@ -443,6 +548,7 @@ const App: React.FC = () => {
                     isLoading={isLoading}
                     currentStatus={currentStatus}
                     onSendMessage={handleSendMessage}
+                    onStop={handleStop}
                     isOpen={isSidebarOpen}
                     setIsOpen={setIsSidebarOpen}
                     applets={applets}
@@ -451,6 +557,7 @@ const App: React.FC = () => {
                     onCreateApplet={handleCreateApplet}
                     onOpenFiles={() => setIsFileOverlayOpen(true)}
                     onOpenSettings={() => setIsSettingsModalOpen(true)}
+                    onOpenImportExport={() => setIsImportExportModalOpen(true)}
                 />
                 <MainContent
                     htmlCode={activeApplet.html}

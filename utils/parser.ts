@@ -39,6 +39,19 @@ export function parseGeminiResponse(responseText: string): ParsedResponse {
         const commandName = match[1];
         const argsStr = match[2] || '';
         
+        if (commandName === 'task_completed') {
+            commands.push({ name: 'task_completed', content: '', isTerminated: true });
+            continue;
+        }
+
+        if (commandName === 'title') {
+            const title = argsStr.replace(/^"|"$/g, '').trim();
+            if (title) {
+                commands.push({ name: 'title', content: title, isTerminated: true });
+            }
+            continue;
+        }
+
         const contentStartIndex = match.index + match[0].length;
         
         let contentEndIndex = cleanResponse.indexOf(terminator, contentStartIndex);
@@ -50,11 +63,6 @@ export function parseGeminiResponse(responseText: string): ParsedResponse {
 
         const rawContent = cleanResponse.substring(contentStartIndex, contentEndIndex);
         const content = rawContent.startsWith('\n') ? rawContent.substring(1) : rawContent;
-
-        if (commandName === 'task_completed') {
-            commands.push({ name: 'task_completed', content: '', isTerminated: true });
-            continue;
-        }
         
         if (['chat', 'reasoning'].includes(commandName)) {
              commands.push({
