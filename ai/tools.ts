@@ -1,71 +1,101 @@
 export const TOOLS_DOCUMENTATION = `
+**AVAILABLE LIBRARIES:**
+You have the following third-party libraries pre-loaded and ready to use in \`index.html\`.
+
+*   **Pico CSS:** A class-less CSS framework for clean, modern styles.
+    *   **Usage:** Write semantic HTML (\`<main>\`, \`<article>\`, \`<nav>\`). Pico styles it automatically.
+    *   **Dark Mode:** Toggle dark mode by changing the \`data-theme\` attribute on the \`<html>\` tag (e.g., \`document.documentElement.dataset.theme = 'dark'\`). The default is 'dark'.
+    *   **Avoid:** Writing basic CSS for layout, buttons, forms, etc. Rely on Pico first.
+
+*   **Lucide Icons:** A clean and consistent icon library.
+    *   **Usage:** Use \`<i data-lucide="[icon-name]"></i>\`. For example, \`<i data-lucide="settings"></i>\`.
+    *   **IMPORTANT:** After adding new icons to the DOM, you MUST call \`lucide.createIcons();\` in your JavaScript to render them.
+    *   **Find icons at:** https://lucide.dev/icons/
+    *   **Avoid:** Using text-based emojis for icons.
+
+*   **Animate.css:** For adding CSS animations.
+    *   **Usage:** Add the required classes to your HTML elements. Example: \`<h1 class="animate__animated animate__bounce">An animated heading</h1>\`.
+
+*   **Chart.js:** For creating charts and data visualizations.
+    *   **Usage:** Create a \`<canvas id="myChart"></canvas>\` in HTML. Then, in JavaScript:
+        \`const ctx = document.getElementById('myChart').getContext('2d');\`
+        \`new Chart(ctx, { type: 'bar', data: {...} });\`
+
+*   **Day.js:** A lightweight library for handling dates and times.
+    *   **Usage:** The \`dayjs\` function is available globally. Example: \`dayjs().format('MMMM D, YYYY');\`.
+
+*   **Howler.js:** An audio library for playing sounds.
+    *   **Usage:** \`const sound = new Howl({ src: ['sound.mp3'] }); sound.play();\`
+    *   **Note:** Use publicly available, royalty-free sound URLs.
+
+*   **localForage:** A better, asynchronous library for storing data in the browser.
+    *   **Usage:** \`localforage.setItem('key', 'value').then(...);\` and \`localforage.getItem('key').then(value => ...);\`.
+    *   **Prefer this over:** \`localStorage\`.
+
 You have the following special commands available to modify files and communicate.
+
+**CRITICAL RULE: You MUST end every command that has a content block with \`$$$\` on a new line.**
+This applies to: \`$$reasoning\`, \`$$chat\`, \`$$edit\`, and \`$$inline_edit\`.
+Failure to do so will cause the system to fail.
 
 **COMMAND REFERENCE:**
 
 1.  **$$reasoning()**
-    -   Use this to explain your thought process. This is for showing your work and is not shown directly to the user.
-    -   The content starts on the next line.
+    -   Explain your thought process before you act. This is mandatory.
     -   Example:
         $$reasoning()
-        The user wants a red button. I will add the button to index.html and then style it in styles.css.
+        The user wants a red button. I will use $$inline_edit to change the background color in styles.css.
+        $$$
 
 2.  **$$chat()**
-    -   Use this to talk to the user. ALL your user-facing messages MUST be inside this command.
-    -   You can use this command at any point in your response. The message will be streamed to the user, and you can continue with other commands in the same response. This is useful for giving updates before a long task.
+    -   Talk to the user. ALL user-facing messages MUST use this command.
     -   Example:
         $$chat()
-        I'm starting on the new login form now. I'll let you know when it's ready to test.
+        I'm starting on the new login form now.
+        $$$
 
 3.  **$$edit(filename)**
-    -   **DANGEROUS!** This command completely **REPLACES** the content of the specified file.
-    -   Use this for initial setup or when a file is empty. For modifications, prefer $$replace_lines, $$insert_content, or $$delete_lines.
+    -   **DANGEROUS!** Completely **REPLACES** the file's content. Use with extreme caution. Prefer \`$$inline_edit\` for all modifications.
     -   Valid filenames: 'index.html', 'styles.css', 'script.js'.
     -   Example:
         $$edit(index.html)
         <!DOCTYPE html>
         <html>
-        <body>
-            <h1>New Content</h1>
-        </body>
+        <body><h1>New Content</h1></body>
         </html>
+        $$$
 
-4.  **$$replace_lines(filename, start_line, end_line)**
-    -   **PREFERRED FOR MODIFICATION.** This replaces a specific block of code from \`start_line\` to \`end_line\` (inclusive).
-    -   Use this to modify or rewrite specific functions, CSS rules, or HTML blocks.
-    -   Example to change a CSS rule from line 5 to line 7:
-        $$replace_lines(styles.css, 5, 7)
-          body {
-            background-color: #111;
-            color: #eee;
-          }
+4.  **$$inline_edit(filename, line_number)**
+    -   **PREFERRED TOOL FOR ALL MODIFICATIONS.** Replaces a block of code by finding an exact match at a specific line.
+    -   This is the primary tool for adding, deleting, or changing code.
+    -   **To delete code:** Provide a \`[[replace]]\` block that is empty.
+    -   **Syntax:**
+        $$inline_edit(filename, line_number)
+        [[find]]
+        (The exact code you want to find and replace)
+        [[replace]]
+        (The new code you want to insert)
+        [[end]]
+        $$$
+    -   **CRITICAL RULE FOR MULTIPLE EDITS:** When making multiple \`inline_edit\` calls on the **same file** in a single turn, you **MUST** order them from the **highest line number to the lowest line number** (bottom to top). This is essential to prevent line number shifts from causing subsequent edits to fail.
+        -   **Correct Order:**
+            1.  \`$$inline_edit(script${'.'}js, 95)\`
+            2.  \`$$inline_edit(script${'.'}js, 42)\`
+            3.  \`$$inline_edit(script${'.'}js, 10)\`
+        -   **Incorrect Order (WILL FAIL):**
+            1.  \`$$inline_edit(script${'.'}js, 10)\`
+            2.  \`$$inline_edit(script${'.'}js, 42)\`
+            3.  \`$$inline_edit(script${'.'}js, 95)\`
 
-5.  **$$insert_content(filename, line_number)**
-    -   This command **INSERTS** new content at a specific line number (1-indexed) without deleting anything. Existing content from that line onwards is pushed down.
-    -   Example to add a new script tag in the HTML head at line 6:
-        $$insert_content(index.html, 6)
-        <script src="new-script.js"></script>
+**ERROR CORRECTION AND CONTINUOUS OPERATION:**
 
-6.  **$$delete_lines(filename, start_line, end_line)**
-    -   This command **DELETES** a range of lines from a file, inclusive.
-    -   Example to delete lines 10 through 12 in script.js:
-        $$delete_lines(script.js, 10, 12)
+*   **Error Feedback:** If your \`$$inline_edit\` command fails (e.g., the code in your \`[[find]]\` block is not at the specified line number), the system will provide an \`OBSERVATION\` log on your next turn. This log will contain:
+    1.  The reason for the failure.
+    2.  The actual code around your target line number.
+    3.  A list of other lines where your \`[[find]]\` block *does* exist, if any.
+    **You MUST use this information to correct your next command.**
 
-7.  **$$snip(json_options)**
-    -   Captures a snapshot of the current web UI preview for visual inspection. The system will automatically resume work after the snapshot is taken.
-    -   **IMPORTANT**: Do **not** use $$recursion_expected with this command, as it happens automatically.
-    -   \`json_options\` is a single argument: a valid JSON object string.
-    -   Available options within the JSON object:
-        -   \`viewport\`: An object with \`width\` and \`height\` numbers to set the preview size (e.g., for mobile).
-        -   \`scrollPercent\`: A number from 0 to 100 to scroll the page before capture.
-        -   \`selector\`: A string with a CSS selector to capture only a specific element.
-    -   Example to check mobile layout:
-        $$snip({ "viewport": { "width": 375, "height": 667 }, "scrollPercent": 0 })
-
-**CONTINUOUS OPERATION:**
-
-*   **$$recursion_expected**
-    -   If your task is not complete, include this exact string anywhere in your response.
-    -   The system will immediately call you again with the updated files to continue the work. This is essential for multi-step tasks.
-    -   Example: After adding HTML, use recursion to then add CSS.
+*   **$$task_completed()**
+    -   Use this command ONLY when the user's entire request is finished. It takes no arguments.
+    -   This signals that the recursive loop should stop.
 `;
