@@ -1,0 +1,5 @@
+{
+  "name": "Vibe Coding UI",
+  "description": "An AI-powered UI code generator with a split view for Gemini chat and a live code preview. The AI can autonomously edit HTML, CSS, and JS files to build a web interface based on user prompts.",
+  "requestFramePermissions": []
+}
